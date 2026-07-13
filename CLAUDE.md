@@ -13,8 +13,8 @@
 ├── README.md                  # 用户文档（安装/使用/FAQ）
 ├── install.bat                # 一键安装脚本（自动装依赖+建快捷方式）
 ├── settings.json              # 用户配置文件（由程序自动读写）
-├── requirements.txt           # PyQt5（Pillow 仅用于生成 .ico，非运行时依赖）
-├── .gitignore                 # 忽略 __pycache__/、*.pid、启动日志.txt
+├── requirements.txt           # PyQt5（Pillow 仅用于生成 .ico，开发依赖）
+├── .gitignore                 # 忽略 __pycache__/、*.pid、启动日志.txt、settings.json、build/dist/
 ├── assets/
     ├── white_chicken.png      # 小鸡精灵图（64×112 像素，7行×4列）
     ├── white_chicken.ico      # 桌面快捷方式 + 托盘图标（walk_down_0 第一帧）
@@ -74,7 +74,10 @@
 ## 运行方式
 
 ```bash
-# 方式一：双击桌面快捷方式（推荐，无任何弹窗）
+# 方式零：下载 Release exe 直接双击运行 🚀（推荐普通用户，无需安装 Python）
+#         从 https://github.com/Penguin123121/Stardew-Valley-Chicken-Pet/releases 下载
+
+# 方式一：双击桌面快捷方式（推荐开发者，无任何弹窗）
 #         桌面上的「星露谷小鸡桌宠.lnk」
 
 # 方式二：命令行（在项目根目录执行）
@@ -388,6 +391,7 @@ HayWidget 创建，半透明跟随鼠标（每 16ms 更新位置）
 - **干草消失动画**：`start_dismiss_animation()` → 切换到干草2 → 300ms 单次定时器 → `dismissed` 信号 → `_dismiss()` 关闭。`dismiss()` 保留用于取消/退出路径（立即关闭）
 - **笑脸表情**：Emotes.png 第8行，进食完成后与干草消失动画并行触发。由 `_on_feeding_done` 中手动 `freeze()` + `_trigger_emote(row=8)`
 - ⚠️ **黄金规则⑤**：`_tick_feeding_approach()` 中每次 tick 都会检测同轴方向是否反转（目标跨过小鸡），若反转则先 emit `anim_changed` 切换动画再 emit `move_request` 执行移动
+- **干草放置边界限制**：`_start_feeding()` 中根据小鸡移动范围 + 嘴部偏移反算干草中心有效区域（`hay_boundary` QRect），传入 `HayWidget`。跟随鼠标时 `_follow_mouse()` 自动 clamp 干草中心到有效区域内，确保放置后小鸡一定能走到。`current_center()` 始终返回窗口实际中心（不再直接返回 `QCursor.pos()`）。**修复了屏幕边缘放置干草导致小鸡永久卡死的 bug。**
 
 ### 6. 设置系统（`settings_manager.py` + `settings_dialog.py`）
 
@@ -435,15 +439,45 @@ HayWidget 创建，半透明跟随鼠标（每 16ms 更新位置）
 **根因**：`_on_emote_finished()` 中无条件调用 `self._anim.unfreeze()`，忽略了拖拽场景下用户仍在按住鼠标的事实。
 **修复**：`_on_emote_finished()` 中加入 `if not self._dragging` 守卫，拖拽期间表情结束也跳过 unfreeze，等 `mouseReleaseEvent` 中松手时再解冻。同时引入 `_drag_emote_active` 标志协调松手时是否解冻的判定。
 
+### ⚠️ 屏幕边缘放置干草导致小鸡永久卡死
+**现象**：用户在屏幕边缘放置干草后，小鸡走到边缘被 clamp 住，永远到不了干草位置，FEEDING 状态无法退出，只能重启。
+**根因**：`_tick_feeding_approach()` 中屏幕边缘 clamp 阻止小鸡继续前进，干草目标位置超出小鸡移动范围，无超时机制。
+**修复**：从源头限制干草放置位置。`_start_feeding()` 中计算干草中心有效区域（小鸡移动边界 + 嘴部偏移反算），传入 `HayWidget._follow_mouse()` 中 clamp；`current_center()` 改为始终返回窗口实际中心。确保放置后小鸡一定能导航到达。
+
+## PyInstaller 打包
+
+项目支持用 PyInstaller 打包为单个 `.exe` 文件，用户无需安装 Python 即可运行。
+
+### 路径兼容机制
+
+所有文件路径通过 `getattr(sys, 'frozen', False)` 检测运行环境：
+- **打包模式**（`sys.frozen = True`）：只读资源（精灵图）从 `sys._MEIPASS` 读取；可写文件（`settings.json`、锁文件、日志）写入 `sys.executable` 所在目录
+- **源码模式**：行为不变，所有路径基于 `__file__` 推导
+
+涉及文件：`main.py`（`_project_root`/`_user_root`/`LOCK_FILE`/`LOG_FILE`）、`chicken_pet.py`（`_resolve_asset`）、`settings_manager.py`（`Settings.__init__`）、`settings_dialog.py`（开机自启快捷方式路径）
+
+### 打包命令
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --windowed --name "StardewValleyChickenPet" --icon assets/white_chicken.ico --add-data "assets;assets" src/main.py
+```
+
+生成的 exe 在 `dist/` 目录，约 35MB。发布时通过 `gh release create` 上传。
+
+> `.gitignore` 中已排除 `build/`、`dist/`、`*.spec`。
+
 ## 最近完成
 
+- ✅ 干草放置边界限制 — 修复屏幕边缘喂食卡死 bug
+- ✅ PyInstaller 单文件打包支持（`sys._MEIPASS` 路径兼容）
+- ✅ GitHub Release v1.0.0（含 exe 一键下载）
 - ✅ 重新启用进食动画（精灵图行6 = EAT）
 - ✅ 桌面快捷方式 + 自定义图标（walk_down_0 第一帧）
 - ✅ 动态路径（不再硬编码用户/目录名，换电脑也能跑）
 - ✅ 始终置顶强化（`HWND_TOPMOST` 定时刷新，防被其他窗口遮挡）
 - ✅ busy 状态托盘气泡反馈
 - ✅ Pillow 从运行时依赖移除
-- ✅ 清理冗余文件（frames/ 开发参考、Grass.png、Objects.png 等 60 个文件约 900KB）
 - ✅ README.md + install.bat 一键安装脚本
 
 ## 后续修改方向
@@ -453,3 +487,4 @@ HayWidget 创建，半透明跟随鼠标（每 16ms 更新位置）
 - 好感度系统（点击+1，喂食+3，长按-2）
 - 音频系统（走路/表情/进食音效）
 - 可能添加更多表情（问号、音符等）
+- GitHub Actions 自动打包发布（CI 自动构建 exe 并创建 Release）

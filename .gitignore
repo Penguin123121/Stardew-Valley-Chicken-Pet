@@ -1,0 +1,22 @@
+# Python 字节码缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 运行时文件
+*.pid
+启动日志.txt
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 用户配置（含个人屏幕坐标等，每台电脑不同）
+settings.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

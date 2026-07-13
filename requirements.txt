@@ -1,0 +1,4 @@
+PyQt5>=5.15.0
+# Pillow — 仅用于开发时生成 .ico 图标文件（assets/white_chicken.ico），
+# 运行时不需要。如果你不需要重新生成图标，可以不安��。
+# pip install Pillow>=9.0.0

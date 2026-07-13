@@ -13,12 +13,20 @@ import signal
 import traceback
 from datetime import datetime
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ── 路径解析（兼容 PyInstaller 打包） ──
+if getattr(sys, 'frozen', False):
+    # PyInstaller 打包：资源在 _MEIPASS 中，可写文件在 exe 所在目录
+    _project_root = sys._MEIPASS
+    _user_root = os.path.dirname(sys.executable)
+else:
+    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _user_root = _project_root
+
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 # ── 启动日志（确保 pythonw 无控制台时也能捕获错误） ──
-LOG_FILE = os.path.join(_project_root, "启动日志.txt")
+LOG_FILE = os.path.join(_user_root, "启动日志.txt")
 
 
 def _log(msg: str):
@@ -92,7 +100,7 @@ except Exception as e:
 from src.chicken_pet import ChickenPet
 
 # ── 单实例锁文件 ──────────────────────────────
-LOCK_FILE = os.path.join(_project_root, ".pet_lock.pid")
+LOCK_FILE = os.path.join(_user_root, ".pet_lock.pid")
 
 
 def check_existing_instance():

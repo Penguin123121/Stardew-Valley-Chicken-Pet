@@ -3,6 +3,7 @@
 """
 
 import ctypes
+import sys
 import time
 
 from PyQt5.QtWidgets import (
@@ -128,9 +129,13 @@ class ChickenPet(QWidget):
     # ═══════════════ 窗口初始化 ═══════════════
 
     def _resolve_asset(self, filename: str) -> str:
-        """查找资源文件路径"""
+        """查找资源文件路径（兼容 PyInstaller 打包和源码运行）"""
         import os
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if getattr(sys, 'frozen', False):
+            # PyInstaller 打包：资源在 _MEIPASS 中
+            base = sys._MEIPASS
+        else:
+            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         return os.path.join(base, "assets", filename)
 
     def _init_window(self):

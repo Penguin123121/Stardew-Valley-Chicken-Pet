@@ -22,10 +22,17 @@ _STARTUP_FOLDER = os.path.join(
 _SHORTCUT_NAME = '星露谷小鸡桌宠.lnk'
 
 # 项目根目录 — 从当前文件位置动态推导（src/settings_dialog.py → 上一级 → 项目根）
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# pythonw.exe 路径 — 与 python.exe 在同一目录
-_PYTHONW = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-_ICON_PATH = os.path.join(_PROJECT_ROOT, 'assets', 'white_chicken.ico')
+if getattr(sys, 'frozen', False):
+    # PyInstaller 打包：exe 自身就是启动目标
+    _PROJECT_ROOT = os.path.dirname(sys.executable)
+    _PYTHONW = sys.executable
+    _START_ARGS = ""   # 直接运行 exe，不需要参数
+    _ICON_PATH = sys.executable  # exe 自带图标，无需额外 ico 文件
+else:
+    _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _PYTHONW = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+    _START_ARGS = "-m src.main"
+    _ICON_PATH = os.path.join(_PROJECT_ROOT, 'assets', 'white_chicken.ico')
 
 
 def _get_shortcut_path() -> str:
@@ -46,7 +53,7 @@ def _set_autostart(enable: bool):
             f'$ws = New-Object -ComObject WScript.Shell; '
             f'$s = $ws.CreateShortcut("{shortcut_path}"); '
             f'$s.TargetPath = "{_PYTHONW}"; '
-            f'$s.Arguments = "-m src.main"; '
+            f'$s.Arguments = "{_START_ARGS}"; '
             f'$s.WorkingDirectory = "{_PROJECT_ROOT}"; '
             f'$s.WindowStyle = 7; '
             f'$s.IconLocation = "{_ICON_PATH}"; '

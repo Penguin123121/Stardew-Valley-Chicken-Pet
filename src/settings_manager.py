@@ -4,6 +4,7 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 
 # 默认设置
@@ -25,9 +26,13 @@ class Settings:
 
     def __init__(self, filepath: str = None):
         if filepath is None:
-            # 默认保存在 src 同级目录
-            base = Path(__file__).parent.parent
-            filepath = str(base / "settings.json")
+            # PyInstaller 打包时写在 exe 旁边，源码运行时写在项目根目录
+            if getattr(sys, 'frozen', False):
+                base = os.path.dirname(sys.executable)
+                filepath = os.path.join(base, "settings.json")
+            else:
+                base = Path(__file__).parent.parent
+                filepath = str(base / "settings.json")
         self._path = filepath
         self.data = DEFAULT_SETTINGS.copy()
         self.load()

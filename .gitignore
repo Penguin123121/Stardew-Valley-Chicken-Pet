@@ -15,6 +15,11 @@ env/
 # 用户配置（含个人屏幕坐标等，每台电脑不同）
 settings.json
 
+# PyInstaller 打包产物
+build/
+dist/
+*.spec
+
 # IDE
 .vscode/
 .idea/

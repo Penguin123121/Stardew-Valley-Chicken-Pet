@@ -21,21 +21,45 @@ DEFAULT_SETTINGS = {
 }
 
 
+def _get_user_data_dir() -> str:
+    """获取用户数据目录（%APPDATA%\StardewValleyChickenPet），
+    不存在则自动创建。回退到 exe/项目 所在目录。"""
+    appdata = os.environ.get('APPDATA', '')
+    if appdata:
+        data_dir = os.path.join(appdata, 'StardewValleyChickenPet')
+    elif getattr(sys, 'frozen', False):
+        data_dir = os.path.dirname(sys.executable)
+    else:
+        data_dir = str(Path(__file__).parent.parent)
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
 class Settings:
     """应用设置管理器"""
 
     def __init__(self, filepath: str = None):
         if filepath is None:
-            # PyInstaller 打包时写在 exe 旁边，源码运行时写在项目根目录
-            if getattr(sys, 'frozen', False):
-                base = os.path.dirname(sys.executable)
-                filepath = os.path.join(base, "settings.json")
-            else:
-                base = Path(__file__).parent.parent
-                filepath = str(base / "settings.json")
+            filepath = os.path.join(_get_user_data_dir(), "settings.json")
         self._path = filepath
         self.data = DEFAULT_SETTINGS.copy()
+        self._migrate_old_settings()
         self.load()
+
+    def _migrate_old_settings(self):
+        """如果旧位置（exe/项目旁边）有 settings.json 而新位置没有，自动迁移"""
+        if os.path.exists(self._path):
+            return  # 新位置已有，不需要迁移
+        if getattr(sys, 'frozen', False):
+            old_path = os.path.join(os.path.dirname(sys.executable), "settings.json")
+        else:
+            old_path = str(Path(__file__).parent.parent / "settings.json")
+        if os.path.exists(old_path) and old_path != self._path:
+            import shutil
+            try:
+                shutil.copy2(old_path, self._path)
+            except Exception:
+                pass  # 迁移失败，使用默认值
 
     # ── 文件读写 ──────────────────────────────
 

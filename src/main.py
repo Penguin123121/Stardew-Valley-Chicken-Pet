@@ -15,12 +15,26 @@ from datetime import datetime
 
 # ── 路径解析（兼容 PyInstaller 打包） ──
 if getattr(sys, 'frozen', False):
-    # PyInstaller 打包：资源在 _MEIPASS 中，可写文件在 exe 所在目录
     _project_root = sys._MEIPASS
-    _user_root = os.path.dirname(sys.executable)
+    _exe_dir = os.path.dirname(sys.executable)
 else:
     _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _user_root = _project_root
+    _exe_dir = _project_root
+
+
+def _get_user_data_dir() -> str:
+    """获取用户数据目录（%APPDATA%\StardewValleyChickenPet），
+    不存在则自动创建。回退到 exe/项目 所在目录。"""
+    appdata = os.environ.get('APPDATA', '')
+    if appdata:
+        data_dir = os.path.join(appdata, 'StardewValleyChickenPet')
+    else:
+        data_dir = _exe_dir
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
+_user_root = _get_user_data_dir()
 
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)

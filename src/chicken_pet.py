@@ -585,10 +585,22 @@ class ChickenPet(QWidget):
     def _apply_always_on_top(self):
         """应用置顶设置"""
         flags = self.windowFlags()
-        if self._settings.always_on_top:
+        had_top = bool(flags & Qt.WindowStaysOnTopHint)
+        want_top = self._settings.always_on_top
+
+        # 标志没变 → 无需重建窗口，只需确保定时器状态正确
+        if had_top == want_top:
+            if want_top:
+                self._topmost_timer.start()
+            else:
+                self._topmost_timer.stop()
+            return
+
+        if want_top:
             flags |= Qt.WindowStaysOnTopHint
         else:
             flags &= ~Qt.WindowStaysOnTopHint
+
         pos = self.pos()
         self.hide()
         self.setWindowFlags(flags)
@@ -596,10 +608,14 @@ class ChickenPet(QWidget):
         self.show()
 
         # 启动或停止置顶刷新定时器
-        if self._settings.always_on_top:
+        if want_top:
             self._topmost_timer.start()
         else:
             self._topmost_timer.stop()
+
+        # ⚠️ hide/show 重建了原生窗口句柄，WS_EX_TRANSPARENT 会丢失
+        # 延迟重新应用鼠标穿透设置，确保新 HWND 已就绪
+        QTimer.singleShot(150, self._apply_click_through)
 
     def _refresh_topmost(self):
         """定时刷新 HWND_TOPMOST — 确保小鸡始终在所有窗口之上。

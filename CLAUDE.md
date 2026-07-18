@@ -444,6 +444,16 @@ HayWidget 创建，半透明跟随鼠标（每 16ms 更新位置）
 **根因**：`_tick_feeding_approach()` 中屏幕边缘 clamp 阻止小鸡继续前进，干草目标位置超出小鸡移动范围，无超时机制。
 **修复**：从源头限制干草放置位置。`_start_feeding()` 中计算干草中心有效区域（小鸡移动边界 + 嘴部偏移反算），传入 `HayWidget._follow_mouse()` 中 clamp；`current_center()` 改为始终返回窗口实际中心。确保放置后小鸡一定能导航到达。
 
+### ⚠️ 置顶切换后鼠标穿透失效
+**现象**：勾选鼠标穿透后再点击始终置顶，鼠标又能控制小鸡了，但设置面板中穿透仍然打勾。
+**根因**：`_apply_always_on_top()` 通过 `hide() → setWindowFlags() → show()` 重建了原生窗口句柄（HWND），导致之前通过 `_apply_click_through()` 设置的 `WS_EX_TRANSPARENT` 扩展样式在新 HWND 上丢失。
+**修复**：① 当置顶标志未实际变化时跳过窗口重建，避免无意义的 HWND 重建；② 当确实需要重建窗口时，延迟 150ms 用 `QTimer.singleShot` 自动重新调用 `_apply_click_through()` 恢复穿透样式。
+
+### ⚠️ exe 放在桌面污染桌面文件
+**现象**：PyInstaller 打包的 exe 放在桌面运行时，`settings.json`、`启动日志.txt`、`.pet_lock.pid` 全部出现在桌面。
+**根因**：打包模式下 `_user_root = os.path.dirname(sys.executable)` 即 exe 所在目录，所有用户数据写在 exe 旁边。
+**修复**：引入 `_get_user_data_dir()` 函数，将用户数据目录改为 `%APPDATA%\StardewValleyChickenPet\`。`main.py` 和 `settings_manager.py` 各有一份相同实现（避免跨文件导入依赖）。`Settings._migrate_old_settings()` 自动将旧位置的 settings.json 迁移到新位置。
+
 ## PyInstaller 打包
 
 项目支持用 PyInstaller 打包为单个 `.exe` 文件，用户无需安装 Python 即可运行。
@@ -451,10 +461,11 @@ HayWidget 创建，半透明跟随鼠标（每 16ms 更新位置）
 ### 路径兼容机制
 
 所有文件路径通过 `getattr(sys, 'frozen', False)` 检测运行环境：
-- **打包模式**（`sys.frozen = True`）：只读资源（精灵图）从 `sys._MEIPASS` 读取；可写文件（`settings.json`、锁文件、日志）写入 `sys.executable` 所在目录
-- **源码模式**：行为不变，所有路径基于 `__file__` 推导
+- **打包模式**（`sys.frozen = True`）：只读资源（精灵图）从 `sys._MEIPASS` 读取；可写文件（`settings.json`、锁文件、日志）写入 `%APPDATA%\StardewValleyChickenPet\`（即 `C:\Users\<用户名>\AppData\Roaming\StardewValleyChickenPet\`），避免污染 exe 所在文件夹
+- **源码模式**：可写文件写入项目根目录（与之前行为一致）
+- **自动迁移**：`Settings.__init__` 中检测旧位置（exe/项目旁）是否有 `settings.json`，若新位置尚无则自动复制迁移
 
-涉及文件：`main.py`（`_project_root`/`_user_root`/`LOCK_FILE`/`LOG_FILE`）、`chicken_pet.py`（`_resolve_asset`）、`settings_manager.py`（`Settings.__init__`）、`settings_dialog.py`（开机自启快捷方式路径）
+涉及文件：`main.py`（`_get_user_data_dir`/`_project_root`/`_user_root`/`LOCK_FILE`/`LOG_FILE`）、`chicken_pet.py`（`_resolve_asset`）、`settings_manager.py`（`_get_user_data_dir`/`Settings.__init__`/`_migrate_old_settings`）、`settings_dialog.py`（开机自启快捷方式路径）
 
 ### 打包命令
 
@@ -469,6 +480,8 @@ pyinstaller --onefile --windowed --name "StardewValleyChickenPet" --icon assets/
 
 ## 最近完成
 
+- ✅ 用户数据目录迁移至 `%APPDATA%` — exe 放桌面不再污染桌面（settings.json/日志/锁文件进 AppData）
+- ✅ 切换始终置顶后鼠标穿透样式丢失修复 — 重建 HWND 后自动重新应用 `WS_EX_TRANSPARENT`
 - ✅ 干草放置边界限制 — 修复屏幕边缘喂食卡死 bug
 - ✅ PyInstaller 单文件打包支持（`sys._MEIPASS` 路径兼容）
 - ✅ GitHub Release v1.0.0（含 exe 一键下载）
